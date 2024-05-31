@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <script src="https://d3js.org/d3.v7.js"></script>
+<style>
+svg{
+    width: 100%;
+    height: 100vh;
+}
+
+line {
+  stroke: #ccc;
+}
+text {
+  text-anchor: center;
+  transform: rotate(-15deg);
+  font-family: "Helvetica Neue", Helvetica, sans-serif;
+  fill: rgb(0, 0, 0);
+  font-size: 10px;
+}
+circle{
+    stroke: #fff;
+    fill-opacity: .5;
+    transition: fill-opacity .2s ease-out;
+}
+.nodeGeometry{
+    cursor:pointer;
+}
+.nodeGeometry:hover circle{
+    fill-opacity: .8;
+}
+</style>
+</head>
+
+<body>
+<div id="content">
+  <svg width="400" height="300">
+    <g id="main">
+        <g class="links"></g>
+        <g class="nodes"></g>
+    </g>
+  </svg>
+</div>
+<script>
+    const width = window.innerWidth, 
+        height = window.innerHeight
+
+    d3.csv("./sourcetargetaccel.csv").then(links=>{
+        
+        let nodes = links.map(link=>[link.source,link.target])
+            .flat()
+            .filter((e,n,l)=>l.indexOf(e)===n)
+            .map(node=>(
+                {
+                    id:node, 
+                    degree:links
+                        .filter(link=> link.source===node ||link.target===node )
+                        .length,
+                    wheel:links
+                        .filter(link=> link.source===node ||link.target===node )
+                        .map(e=>[e.source,e.target])
+                        .flat()
+                        .filter((e,n,l)=>l.indexOf(e)===n)
+                        
+                }
+            ));
+        
+        
+        
+        const simulation = d3.forceSimulation(nodes)
+            .force('charge', d3.forceManyBody().strength(-400))
+            .force('center', d3.forceCenter(width / 2, height / 2))
+            .force('link', d3.forceLink(links).id(function(d) { return d.id; }).distance(40))
+            .on('tick', ticked);
+
+        function updateLinks() {
+            const u = d3.select('.links')
+                .selectAll('.link')
+                .data(links)
+                .join('line')
+                .classed('link',true)
+                .attr('x1', function(d) {
+                    return d.source.x
+                })
+                .attr('y1', function(d) {
+                    return d.source.y
+                })
+                .attr('x2', function(d) {
+                    return d.target.x
+                })
+                .attr('y2', function(d) {
+                    return d.target.y
+                });
+        }
+        const nodeGeometry = d3.select('.nodes')
+                .selectAll('g.nodeGeometry')
+                .data(nodes)
+                .join('g')
+                .classed('nodeGeometry',true)
+                .on("click",function(e,d){
+                    e.stopPropagation()
+                    d3.selectAll(".nodeGeometry")
+                        .select("circle")
+                        .style("stroke","white")
+                    d3.select(this).select("circle").style("stroke","black")
+                    d3.selectAll(".nodeGeometry").each(function(dNode){
+                        d3.select(this).style("opacity",d.wheel.includes(dNode.id)?1:0.20)
+                    })
+                    d3.selectAll(".link").each(function(dLink){
+                        d3.select(this).style("opacity",d.wheel.includes(dLink.source.id) && d.wheel.includes(dLink.target.id)?1:0)
+                    })
+                })
+        
+        const logOfRelevance = d3.scaleLog().domain(d3.extent(nodes,d=>+d.degree)).range([1,30])
+        const palette = ["#7c1158", "#bd7ebe", "#1a53ff","#ea5545", "#f46a9b", "#ef9b20", "#edbf33", "#ede15b", "#bdcf32", "#fdcce5", "#27aeef", "#b33dc6","#fd7f6f"];
+        
+        nodeGeometry.append("circle").attr('r',function(d) {
+                return logOfRelevance(d.degree)
+        })
+        .attr("fill",'lightblue');
+        nodeGeometry.append("text").text(d=>d.id);
+        function updateNodes() {
+             d3.select('.nodes')
+                .selectAll('g.nodeGeometry')
+                .attr("transform",d=>`translate(${d.x},${d.y})`)
+        }
+
+        function ticked() {
+            updateLinks()
+            updateNodes()
+        }
+        //ZOOM and PAN
+        let  svg = d3.select("#content")
+        svg = svg.call(d3.zoom().on("zoom", zoomed)).select("g")
+        function zoomed(e) {
+            const {x,y,k} = e.transform
+          svg.attr("transform", "translate(" + x + "," + y + ")" + " scale(" + k + ")");
+        }
+        d3.select("body").on("click",()=>{
+            d3.selectAll(".link").style("opacity",1)
+            d3.selectAll(".nodeGeometry")
+                .style("opacity",1)
+                .select("circle")
+                .style("stroke","white")
+        })
+    })
+</script>
+</body>
+</html>
